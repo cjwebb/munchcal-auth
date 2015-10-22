@@ -1,14 +1,35 @@
 (ns auth.handler-test
-  (:require [clojure.test :refer :all]
-            [ring.mock.request :as mock]
+  (:require [midje.sweet :refer :all]
+            [clj-http.client :as client]
+            [ring.adapter.jetty :refer [run-jetty]]
             [auth.handler :refer :all]))
 
-(deftest test-app
-  (testing "main route"
-    (let [response (app (mock/request :get "/"))]
-      (is (= (:status response) 200))
-      (is (= (:body response) "Hello World"))))
+(def test-port 10035)
+(def base-url (str "http://localhost:" test-port))
 
-  (testing "not-found route"
-    (let [response (app (mock/request :get "/invalid"))]
-      (is (= (:status response) 404)))))
+(defn start-server []
+  (loop [server (run-jetty app {:port test-port
+                                :join? false})]
+    (if (.isStarted server)
+      server
+      (recur server))))
+
+(defn stop-server [server]
+  (.stop server))
+
+(defn http-get [url]
+  (client/get url {:throw-exceptions false :as :json}))
+
+(facts "Auth App"
+  (facts "main route returns application-name"
+    (let [server (start-server)]
+      (http-get base-url)
+      => (contains {:status 200 :body {:application-name "auth"}})
+      (stop-server server)))
+
+  (facts "not-found route"
+    (let [server (start-server)]
+      (http-get (str base-url "/invalid"))
+      => (contains {:status 404})
+      (stop-server server))))
+
