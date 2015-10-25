@@ -15,7 +15,8 @@
                  [metosin/schema-tools "0.5.2"]
                  [dire "0.5.3"]]
   :plugins [[lein-ring "0.8.13"]]
-  :ring {:handler auth.handler/app}
+  :ring {:handler auth.handler/app
+         :reload-paths ["src"]}
   :profiles
   {:dev {:dependencies [[javax.servlet/servlet-api "2.5"]
                         [cheshire "5.5.0"]

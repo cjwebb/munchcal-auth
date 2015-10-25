@@ -15,6 +15,7 @@
             [crypto.password.bcrypt :as password]))
 
 (defn token-id [] (url-part 32))
+(defn make-account-id [] (str (java.util.UUID/randomUUID)))
 
 (def db-opts
   {:access-key (System/getenv "MC_AWS_ACCESS_KEY")
@@ -49,15 +50,33 @@
   {:token (dissoc (token) :account-id)
    :account (dissoc (account) :password)})
 
+; todo - make this actually validate
+(s/defschema SignUpRequest
+  {:email s/Str
+   :password s/Str
+   :name s/Str})
+
 (defn sign-up [req]
-  ; require email, password, name
-  ; check they are valid, and above within limits
   ; check email isn't already in use
-  ; check name isn't already in use?
   ; generate auth-token
   ; hash password
   ; persist to dynamo
-  {:body (account-and-token-response)})
+  (let [body (:body req)
+        data (st/select-schema body SignUpRequest)
+        account-id (make-account-id)]
+    {:body {:account (dissoc data :password)}}))
+
+(defn validation-error? [e]
+  (if (instance? clojure.lang.ExceptionInfo e)
+    (let [data (ex-data e)
+          type (:type data)]
+      (= type :schema-tools.coerce/error))))
+
+(defn handle-validation-error [e & args]
+  (let [data (ex-data e)]
+    {:status 400 :body (:error data)}))
+
+(with-handler! #'sign-up validation-error? handle-validation-error)
 
 (defn login [req]
   ; require email, password
@@ -72,7 +91,7 @@
   ; delete token from dynamodb
   {:status 204})
 
-(defn lookup-token [req]
+(defn lookup-token [id]
   ; lookup token by token-id
   ; lookup account by account-id
   {:body (account-and-token-response)})
@@ -83,14 +102,14 @@
   (POST "/auth/signup" req (sign-up req))
   (POST "/auth/login" req (login req))
   (POST "/auth/logout" req (logout req))
-  (GET "/auth/tokens/:id" req (lookup-token req))
-  (route/not-found "Not Found"))
+  (GET "/auth/tokens/:id" [id] (lookup-token id))
+  (route/not-found {:body {:error "Not Found"}}))
 
 (def app
   (-> app-routes
       (wrap-cors :access-control-allow-origin [#".*"]
                  :access-control-allow-methods [:get :post])
-      middleware/wrap-json-response
       (middleware/wrap-json-body {:keywords? true})
+      middleware/wrap-json-response
       (wrap-defaults api-defaults)))
 
