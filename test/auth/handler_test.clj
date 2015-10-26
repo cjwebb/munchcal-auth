@@ -7,15 +7,13 @@
 (def test-port 10035)
 (def base-url (str "http://localhost:" test-port))
 
-(defn start-server []
-  (loop [server (run-jetty app {:port test-port
-                                :join? false})]
-    (if (.isStarted server)
-      server
-      (recur server))))
+(def server (atom nil))
 
-(defn stop-server [server]
-  (.stop server))
+(defn start-server []
+  (swap! server (fn [_] (run-jetty app {:port test-port :join? false}))))
+
+(defn stop-server []
+  (.stop @server))
 
 (defn http-get [url]
   (client/get url {:throw-exceptions false
@@ -29,13 +27,9 @@
                     :form-params body
                     :content-type :json}))
 
-(background
-  (around :checks
-          (let [server (start-server)]
-            ?form
-            (stop-server server))))
+(against-background [(before :contents (start-server))
+                     (after :contents (stop-server))]
 
-(facts "Auth App"
   (facts "main route returns application-name"
     (http-get base-url)
     => (contains {:status 200 :body {:application-name "auth"}}))
@@ -51,12 +45,17 @@
                                      :password "missing-required-key"}}))
 
   (facts "Sign-Up and GET token"
-    (http-post (str base-url "/auth/signup") {:email "colin@mailinator.com"
-                                              :password "password1"
-                                              :name "Colin"})
-    ; todo - check more things in assertion
-    => (contains {:status 200 :body {:account {:name "Colin"
-                                               :email "colin@mailinator.com"}}}))
+    (let [response (http-post (str base-url "/auth/signup")
+                              {:email "colin@mailinator.com"
+                               :password "password1"
+                               :name "Colin"})
+          account (get-in response [:body :account])
+          token   (get-in response [:body :token])]
+      (response :status) => 200
+      account => (contains {:name "Colin"
+                            :email "colin@mailinator.com"
+                            :id anything})
+      token => (contains {:id anything})))
 
 ;  (facts "GET token with unknown token returns 404"
 ;    (http-get (str base-url "/auth/tokens/invalid-token"))

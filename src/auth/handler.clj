@@ -14,7 +14,7 @@
             [crypto.random :refer [url-part]]
             [crypto.password.bcrypt :as password]))
 
-(defn token-id [] (url-part 32))
+(defn make-token-id [] (url-part 32))
 (defn make-account-id [] (str (java.util.UUID/randomUUID)))
 
 (def db-opts
@@ -23,7 +23,8 @@
    :endpoint "https://dynamodb.eu-west-1.amazonaws.com"})
 
 (defn encrypt-password [plain-text]
-  (password/encrypt plain-text (System/getenv "MUNCHCAL_BCRYPT_WORK_FACTOR")))
+  (password/encrypt plain-text
+                    (read-string (System/getenv "MUNCHCAL_BCRYPT_WORK_FACTOR"))))
 
 ; ---------- data -----------
 ; dynamotable
@@ -41,7 +42,7 @@
 ;   hash id (for checking if token exists)
 ;   secondary-index account-id (for login flow lookup)
 (defn token []
-  {:id (token-id)
+  {:id (make-token-id)
    :account-id "6ca2e9c0-f4ed-11e4-b443-353a40402a60"
    :date-created "2015-05-07 20:15:29.500"})
 
@@ -58,13 +59,14 @@
 
 (defn sign-up [req]
   ; check email isn't already in use
-  ; generate auth-token
   ; hash password
   ; persist to dynamo
-  (let [body (:body req)
-        data (st/select-schema body SignUpRequest)
-        account-id (make-account-id)]
-    {:body {:account (dissoc data :password)}}))
+  (let [data (st/select-schema (req :body) SignUpRequest)
+        account-id (make-account-id)
+        token-id (make-token-id)
+        encrypted-password (encrypt-password (data :password))]
+    {:body {:account (assoc (dissoc data :password) :id account-id)
+            :token {:id token-id}}}))
 
 (defn validation-error? [e]
   (if (instance? clojure.lang.ExceptionInfo e)
