@@ -6,10 +6,11 @@
             [ring.middleware.cors :refer [wrap-cors]]
             [clj-time.core :as t]
             [clj-time.format :as f]
-            [taoensso.faraday :as db]
             [schema.core :as s]
             [schema.coerce :as coerce]
             [schema-tools.core :as st]
+            [auth.validation :as v]
+            [auth.db :as db]
             [dire.core :refer :all]
             [crypto.random :refer [url-part]]
             [crypto.password.bcrypt :as password]))
@@ -17,39 +18,16 @@
 (defn make-token-id [] (url-part 32))
 (defn make-account-id [] (str (java.util.UUID/randomUUID)))
 
-(def db-opts
-  {:access-key (System/getenv "MC_AWS_ACCESS_KEY")
-   :secret-key (System/getenv "MC_AWS_SECRET_KEY")
-   :endpoint "https://dynamodb.eu-west-1.amazonaws.com"})
-
 (defn encrypt-password [plain-text]
   (password/encrypt plain-text
                     (read-string (System/getenv "MUNCHCAL_BCRYPT_WORK_FACTOR"))))
 
-; ---------- data -----------
-; dynamotable
-;   hash id (for normal lookup)
-;   secondary-index email (for login lookup)
-(defn account []
-  {:id "6ca2e9c0-f4ed-11e4-b443-353a40402a60"
-   :name "Colin Webb"
-   :email "colin@mailinator"
-   :password (password/encrypt "password1" 12)
-   :date-created "2015-05-07 20:15:29.500"
-   :date-modified "2015-05-07 20:15:29.500"})
-
-; dynamotable
-;   hash id (for checking if token exists)
-;   secondary-index account-id (for login flow lookup)
-(defn token []
-  {:id (make-token-id)
-   :account-id "6ca2e9c0-f4ed-11e4-b443-353a40402a60"
-   :date-created "2015-05-07 20:15:29.500"})
-
 ; ---------- handlers -----------
 (defn account-and-token-response []
-  {:token (dissoc (token) :account-id)
-   :account (dissoc (account) :password)})
+  (let [account-id (make-account-id)
+        token-id (make-token-id)]
+  {:token (dissoc (db/get-token! token-id) :account-id)
+   :account (dissoc (db/get-account! account-id) :password)}))
 
 ; todo - make this actually validate
 (s/defschema SignUpRequest
@@ -57,28 +35,26 @@
    :password s/Str
    :name s/Str})
 
+(defn- make-account-data [sign-up-data]
+  (let [encrypted-password (encrypt-password (sign-up-data :password))]
+    (-> sign-up-data
+        (assoc :password encrypted-password)
+        (assoc :id (make-account-id)))))
+
+(defn- make-token-data [account]
+  (-> {:id (make-token-id)}
+      (assoc :account-id (account :id))))
+
 (defn sign-up [req]
   ; check email isn't already in use
-  ; hash password
-  ; persist to dynamo
   (let [data (st/select-schema (req :body) SignUpRequest)
-        account-id (make-account-id)
-        token-id (make-token-id)
-        encrypted-password (encrypt-password (data :password))]
-    {:body {:account (assoc (dissoc data :password) :id account-id)
-            :token {:id token-id}}}))
+        account-data (make-account-data data)
+        token-data (make-token-data account-data)
+        token (db/put-token! token-data)]
+    {:body {:account (db/put-account! account-data) ; todo - db/put-account! returns nothing
+            :token {:id (token-data :id)}}}))
 
-(defn validation-error? [e]
-  (if (instance? clojure.lang.ExceptionInfo e)
-    (let [data (ex-data e)
-          type (:type data)]
-      (= type :schema-tools.coerce/error))))
-
-(defn handle-validation-error [e & args]
-  (let [data (ex-data e)]
-    {:status 400 :body (:error data)}))
-
-(with-handler! #'sign-up validation-error? handle-validation-error)
+(with-handler! #'sign-up v/validation-error? v/handle-validation-error)
 
 (defn login [req]
   ; require email, password
@@ -94,9 +70,9 @@
   {:status 204})
 
 (defn lookup-token [id]
-  ; lookup token by token-id
-  ; lookup account by account-id
-  {:body (account-and-token-response)})
+  (let [token (db/get-token! id)
+        account (db/get-account! (token :account-id))]
+    {:body {:account account :token token}}))
 
 ; ------------ routes ----------
 (defroutes app-routes

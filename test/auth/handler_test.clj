@@ -2,7 +2,8 @@
   (:require [midje.sweet :refer :all]
             [clj-http.client :as client]
             [ring.adapter.jetty :refer [run-jetty]]
-            [auth.handler :refer :all]))
+            [auth.handler :refer :all]
+            [auth.db :as db]))
 
 (def test-port 10035)
 (def base-url (str "http://localhost:" test-port))
@@ -27,7 +28,8 @@
                     :form-params body
                     :content-type :json}))
 
-(against-background [(before :contents (start-server))
+(against-background [(before :contents (db/init!))
+                     (before :contents (start-server))
                      (after :contents (stop-server))]
 
   (facts "main route returns application-name"
@@ -45,20 +47,20 @@
                                      :password "missing-required-key"}}))
 
   (facts "Sign-Up and GET token"
-    (let [response (http-post (str base-url "/auth/signup")
-                              {:email "colin@mailinator.com"
-                               :password "password1"
-                               :name "Colin"})
-          account (get-in response [:body :account])
-          token   (get-in response [:body :token])]
-      (response :status) => 200
+    (let [signup-response (http-post (str base-url "/auth/signup")
+                                     {:email "colin@mailinator.com"
+                                      :password "password1"
+                                      :name "Colin"})
+          token-id (get-in signup-response [:body :token :id])
+          token-response (http-get (str base-url "/auth/tokens/" token-id))
+          account (get-in token-response [:body :account])]
+      (signup-response :status) => 200
+      (token-response :status) => 200
       account => (contains {:name "Colin"
                             :email "colin@mailinator.com"
-                            :id anything})
-      token => (contains {:id anything})))
+                            :id anything})))
 
 ;  (facts "GET token with unknown token returns 404"
 ;    (http-get (str base-url "/auth/tokens/invalid-token"))
-;    => (contains {:status 404}))
+;    => (contains {:status 404})))
 )
-
