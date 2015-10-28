@@ -69,10 +69,16 @@
   ; delete token from dynamodb
   {:status 204})
 
+; todo - make this nicer, maybe using a monad,
+;        or some preconditions with dire
 (defn lookup-token [id]
-  (let [token (db/get-token! id)
-        account (db/get-account! (token :account-id))]
-    {:body {:account account :token token}}))
+  (let [token (db/get-token! id)]
+    (if (nil? (:account-id token))
+      {:status 404}
+      (let [account (db/get-account! (:account-id token))]
+        (if (nil? account)
+          {:status 404}
+          {:body {:account account :token token}})))))
 
 ; ------------ routes ----------
 (defroutes app-routes

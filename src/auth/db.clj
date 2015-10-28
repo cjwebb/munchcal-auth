@@ -2,6 +2,7 @@
   (:require [clj-time.core :as t]
             [clj-time.format :as f]
             [taoensso.faraday :as db]
+            [schema.core :as s]
             [dire.core :refer :all]))
 
 ; ---------- config ---------
@@ -35,8 +36,10 @@
   ; todo - add date-created/modified
   (db/put-item db-opts :accounts data))
 
-(defn get-account! [id]
-  (db/get-item db-opts :accounts {:id id}))
+(s/defn get-account!
+  "Retrieve an account, via the account-id"
+  [account-id :- s/Str]
+  (db/get-item db-opts :accounts {:id account-id}))
 
 ;{:id id
 ;   :name "Colin Webb"
@@ -52,8 +55,10 @@
 (defn put-token! [data]
   (db/put-item db-opts :tokens data))
 
-(defn get-token! [id]
-  (db/get-item db-opts :tokens {:id id}))
+(s/defn get-token!
+  "Retrieve an auth token, given the token-id"
+  [token-id :- s/Str]
+  (db/get-item db-opts :tokens {:id token-id}))
 
 ;  {:id id 
 ;   :account-id "6ca2e9c0-f4ed-11e4-b443-353a40402a60"

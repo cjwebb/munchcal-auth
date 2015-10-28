@@ -60,7 +60,7 @@
                             :email "colin@mailinator.com"
                             :id anything})))
 
-;  (facts "GET token with unknown token returns 404"
-;    (http-get (str base-url "/auth/tokens/invalid-token"))
-;    => (contains {:status 404})))
-)
+  (facts "GET token with unknown token returns 404"
+    (http-get (str base-url "/auth/tokens/invalid-token"))
+    => (contains {:status 404})))
+
