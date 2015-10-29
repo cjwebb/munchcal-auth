@@ -17,6 +17,7 @@
   :plugins [[lein-ring "0.8.13"]
             [lein-dynamodb-local "0.2.6"]]
   :ring {:handler auth.handler/app
+         :init auth.db/init!
          :reload-paths ["src"]}
   :dynamodb-local {:in-memory? true}
   :profiles

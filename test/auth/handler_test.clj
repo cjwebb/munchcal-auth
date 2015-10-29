@@ -46,6 +46,19 @@
                                      :email "missing-required-key"
                                      :password "missing-required-key"}}))
 
+  (facts "Sign-Up returns account and token info"
+    (let [response (http-post (str base-url "/auth/signup")
+                              {:email "colin1@mailinator.com"
+                               :password "password1"
+                               :name "Colin1"})
+          account (get-in response [:body :account])
+          token (get-in response [:body :token])]
+      (response :status) => 200
+      account => (contains {:name "Colin1"
+                            :email "colin1@mailinator.com"
+                            :id anything})
+      token => (contains {:id anything})))
+
   (facts "Sign-Up and GET token"
     (let [signup-response (http-post (str base-url "/auth/signup")
                                      {:email "colin@mailinator.com"
@@ -54,7 +67,6 @@
           token-id (get-in signup-response [:body :token :id])
           token-response (http-get (str base-url "/auth/tokens/" token-id))
           account (get-in token-response [:body :account])]
-      (signup-response :status) => 200
       (token-response :status) => 200
       account => (contains {:name "Colin"
                             :email "colin@mailinator.com"

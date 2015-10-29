@@ -49,11 +49,14 @@
   ; check email isn't already in use
   (let [data (st/select-schema (req :body) SignUpRequest)
         account-data (make-account-data data)
-        token-data (make-token-data account-data)
-        token (db/put-token! token-data)]
-    {:body {:account (db/put-account! account-data) ; todo - db/put-account! returns nothing
-            :token {:id (token-data :id)}}}))
+        token-data (make-token-data account-data)]
+    (do
+      (db/put-token! token-data)
+      (db/put-account! account-data)
+      {:body {:account (dissoc account-data :password)
+              :token (dissoc token-data :account-id)}})))
 
+; todo - handle big failures, like database not working
 (with-handler! #'sign-up v/validation-error? v/handle-validation-error)
 
 (defn login [req]

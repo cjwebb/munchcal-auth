@@ -17,10 +17,14 @@
     [:id :s]
     {:throughput {:read 1 :write 1} :block? true}))
 
+(with-pre-hook! #'create-accounts-table #(println "Creating :accounts database table"))
+
 (defn- create-tokens-table []
   (db/create-table db-opts :tokens
     [:id :s]
     {:throughput {:read 1 :write 1} :block? true}))
+
+(with-pre-hook! #'create-tokens-table #(println "Creating :tokens database table"))
 
 (defn init! []
   (let [tables (set (db/list-tables db-opts))]
