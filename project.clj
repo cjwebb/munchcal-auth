@@ -25,7 +25,8 @@
                         [cheshire "5.5.0"]
                         [clj-http "2.0.0"]
                         [ring/ring-jetty-adapter "1.4.0"]
-                        [midje "1.7.0"]]
+                        [midje "1.7.0"]
+                        [org.clojure/test.check "0.8.2"]]
          :injections [(require 'schema.core)
                       (schema.core/set-fn-validation! true)]}})
 
