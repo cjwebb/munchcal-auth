@@ -21,18 +21,13 @@
   (password/encrypt plain-text
                     (read-string (System/getenv "MUNCHCAL_BCRYPT_WORK_FACTOR"))))
 
-; ---------- handlers -----------
-(defn account-and-token-response []
-  (let [account-id (make-account-id)
-        token-id (make-token-id)]
-  {:token (dissoc (db/get-token! token-id) :account-id)
-   :account (dissoc (db/get-account! account-id) :password)}))
+(defn account-and-token-response [account token]
+  {:body {:account (dissoc account :password)
+          :token (dissoc token :account-id)}})
 
+; ---------- handlers -----------
 ; todo - make this actually validate
-(s/defschema SignUpRequest
-  {:email s/Str
-   :password s/Str
-   :name s/Str})
+(s/defschema SignUpRequest {:email s/Str :password s/Str :name s/Str})
 
 (defn- make-account-data [sign-up-data]
   (let [encrypted-password (encrypt-password (sign-up-data :password))]
@@ -54,24 +49,37 @@
       (do
         (db/put-token! token-data)
         (db/put-account! account-data)
-        {:body {:account (dissoc account-data :password)
-                :token (dissoc token-data :account-id)}}))))
+        (account-and-token-response account-data token-data)))))
 
-; todo - handle big failures, like database not working
 (with-handler! #'sign-up v/validation-error? v/handle-validation-error)
 
+(s/defschema LoginRequest {:email s/Str :password s/Str})
+
 (defn login [req]
-  ; require email, password
-  ; check they are valid, and within limits
-  ; hash password
-  ; lookup by email, and compare password
-  ; if that works, lookup token by account-id
-  (do (println req) {:body (account-and-token-response)}))
+  (let [data (st/select-schema (:body req) LoginRequest)
+        account (db/get-account-by-email! (:email data))]
+    (if-not (and (some? (:password account))
+                 (password/check (:password data) (:password account)))
+      {:status 401 :body {:error "invalid-credentials"}}
+      (let [new-token-data (make-token-data account)
+            old-token (db/get-token-by-account-id! (:id account))]
+        (do
+          (db/put-token! new-token-data)
+          (db/delete-token! (:id old-token))
+          (account-and-token-response account new-token-data))))))
+
+(with-handler! #'login v/validation-error? v/handle-validation-error)
+
+(s/defschema LogoutRequest {:token {:id s/Str}})
 
 (defn logout [req]
-  ; require token
-  ; delete token from dynamodb
-  {:status 204})
+  (let [data (st/select-schema (:body req) LogoutRequest)
+        token-id (get-in data [:token :id])]
+    (do
+      (db/delete-token! token-id)
+      {:status 204})))
+
+(with-handler! #'logout v/validation-error? v/handle-validation-error)
 
 (defn lookup-token [id]
   (let [token (db/get-token! id)]
@@ -80,7 +88,7 @@
       (let [account (db/get-account! (:account-id token))]
         (if (nil? account)
           {:status 404}
-          {:body {:account account :token token}})))))
+          (account-and-token-response account token))))))
 
 ; ------------ routes ----------
 (defroutes app-routes

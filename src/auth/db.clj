@@ -28,7 +28,12 @@
 (defn- create-tokens-table []
   (db/create-table db-opts :tokens
     [:id :s]
-    {:throughput {:read 1 :write 1} :block? true}))
+    {:throughput {:read 1 :write 1}
+     :block? true
+     :gsindexes [{:name "account-index"
+                  :hash-keydef [:account-id :s]
+                  :projection :all
+                  :throughput {:read 1 :write 1}}]}))
 
 (with-pre-hook! #'create-tokens-table #(println "Creating :tokens database table"))
 
@@ -55,14 +60,23 @@
                    {:email [:eq email]}
                    {:index "email-index"})))
 
-; dynamotable
-;   hash id (for checking if token exists)
-;   secondary-index account-id (for login flow lookup)
 (defn put-token! [data]
   (db/put-item db-opts :tokens data))
 
 (s/defn get-token!
-  "Retrieve an auth token, given the token-id"
+  "Retrieve an auth token, via the token-id"
   [token-id :- s/Str]
   (db/get-item db-opts :tokens {:id token-id}))
+
+(s/defn get-token-by-account-id!
+  "Retrieve an auth token, via the account-id"
+  [account-id :- s/Str]
+  (first (db/query db-opts :tokens
+                   {:account-id [:eq account-id]}
+                   {:index "account-index"})))
+
+(s/defn delete-token!
+  "Delete an auth token, via the token-id"
+  [token-id :- s/Str]
+  (db/delete-item db-opts :tokens {:id token-id}))
 

@@ -19,7 +19,8 @@
   :ring {:handler auth.handler/app
          :init auth.db/init!
          :reload-paths ["src"]}
-  :dynamodb-local {:in-memory? true}
+  :dynamodb-local {:in-memory? true
+                   :shared-db? true}
   :profiles
   {:dev {:dependencies [[javax.servlet/servlet-api "2.5"]
                         [cheshire "5.5.0"]
