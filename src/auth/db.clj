@@ -6,6 +6,7 @@
             [dire.core :refer :all]))
 
 ; ---------- config ---------
+; todo - get endpoint from env
 (def db-opts
   {:access-key (System/getenv "MC_AWS_ACCESS_KEY")
    :secret-key (System/getenv "MC_AWS_SECRET_KEY")
@@ -15,7 +16,12 @@
 (defn- create-accounts-table []
   (db/create-table db-opts :accounts
     [:id :s]
-    {:throughput {:read 1 :write 1} :block? true}))
+    {:throughput {:read 1 :write 1}
+     :block? true
+     :gsindexes [{:name "email-index"
+                  :hash-keydef [:email :s]
+                  :projection :all
+                  :throughput {:read 1 :write 1}}]}))
 
 (with-pre-hook! #'create-accounts-table #(println "Creating :accounts database table"))
 
@@ -33,9 +39,6 @@
       (when-not (contains? tables :tokens) (create-tokens-table)))))
 
 ; ---------- methods  -----------
-; dynamotable
-;   hash id (for normal lookup)
-;   secondary-index email (for login lookup)
 (defn put-account! [data]
   ; todo - add date-created/modified
   (db/put-item db-opts :accounts data))
@@ -45,13 +48,12 @@
   [account-id :- s/Str]
   (db/get-item db-opts :accounts {:id account-id}))
 
-;{:id id
-;   :name "Colin Webb"
-;   :email "colin@mailinator"
-;   :password "password1"
-;   :date-created "2015-05-07 20:15:29.500"
-;   :date-modified "2015-05-07 20:15:29.500"})
-
+(s/defn get-account-by-email!
+  "Retrieve an account, via email address"
+  [email :- s/Str]
+  (first (db/query db-opts :accounts
+                   {:email [:eq email]}
+                   {:index "email-index"})))
 
 ; dynamotable
 ;   hash id (for checking if token exists)
@@ -63,8 +65,4 @@
   "Retrieve an auth token, given the token-id"
   [token-id :- s/Str]
   (db/get-item db-opts :tokens {:id token-id}))
-
-;  {:id id 
-;   :account-id "6ca2e9c0-f4ed-11e4-b443-353a40402a60"
-;   :date-created "2015-05-07 20:15:29.500"})
 

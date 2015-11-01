@@ -4,10 +4,9 @@
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
             [ring.middleware.json :as middleware]
             [ring.middleware.cors :refer [wrap-cors]]
-            [clj-time.core :as t]
-            [clj-time.format :as f]
+;            [clj-time.core :as t]
+;            [clj-time.format :as f]
             [schema.core :as s]
-            [schema.coerce :as coerce]
             [schema-tools.core :as st]
             [auth.validation :as v]
             [auth.db :as db]
@@ -46,15 +45,17 @@
       (assoc :account-id (account :id))))
 
 (defn sign-up [req]
-  ; check email isn't already in use
   (let [data (st/select-schema (req :body) SignUpRequest)
+        email-exists? (some? (db/get-account-by-email! (:email data)))
         account-data (make-account-data data)
         token-data (make-token-data account-data)]
-    (do
-      (db/put-token! token-data)
-      (db/put-account! account-data)
-      {:body {:account (dissoc account-data :password)
-              :token (dissoc token-data :account-id)}})))
+    (if email-exists?
+      {:status 400 :body {:error {:email "already-in-use"}}}
+      (do
+        (db/put-token! token-data)
+        (db/put-account! account-data)
+        {:body {:account (dissoc account-data :password)
+                :token (dissoc token-data :account-id)}}))))
 
 ; todo - handle big failures, like database not working
 (with-handler! #'sign-up v/validation-error? v/handle-validation-error)
@@ -72,8 +73,6 @@
   ; delete token from dynamodb
   {:status 204})
 
-; todo - make this nicer, maybe using a monad,
-;        or some preconditions with dire
 (defn lookup-token [id]
   (let [token (db/get-token! id)]
     (if (nil? (:account-id token))
