@@ -6,11 +6,10 @@
             [dire.core :refer :all]))
 
 ; ---------- config ---------
-; todo - get endpoint from env
 (def db-opts
-  {:access-key (System/getenv "MC_AWS_ACCESS_KEY")
-   :secret-key (System/getenv "MC_AWS_SECRET_KEY")
-   :endpoint "http://localhost:8000"})
+  {:access-key (System/getenv "AWS_ACCESS_KEY")
+   :secret-key (System/getenv "AWS_SECRET_KEY")
+   :endpoint (System/getenv "DYNAMODB_URL")})
 
 ; ---------- setup ---------
 (defn- create-accounts-table []
@@ -44,9 +43,15 @@
       (when-not (contains? tables :tokens) (create-tokens-table)))))
 
 ; ---------- methods  -----------
+(defn- datetime-now []
+  (f/unparse (f/formatters :date-time) (t/now)))
+
+(defn- add-datetimes [data]
+  (let [now (datetime-now)]
+    (assoc data :created-date now :modified-date now)))
+
 (defn put-account! [data]
-  ; todo - add date-created/modified
-  (db/put-item db-opts :accounts data))
+  (db/put-item db-opts :accounts (add-datetimes data)))
 
 (s/defn get-account!
   "Retrieve an account, via the account-id"
@@ -61,7 +66,7 @@
                    {:index "email-index"})))
 
 (defn put-token! [data]
-  (db/put-item db-opts :tokens data))
+  (db/put-item db-opts :tokens (add-datetimes data)))
 
 (s/defn get-token!
   "Retrieve an auth token, via the token-id"

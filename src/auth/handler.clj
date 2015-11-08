@@ -4,8 +4,6 @@
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
             [ring.middleware.json :as middleware]
             [ring.middleware.cors :refer [wrap-cors]]
-;            [clj-time.core :as t]
-;            [clj-time.format :as f]
             [schema.core :as s]
             [schema-tools.core :as st]
             [auth.validation :as v]
@@ -22,8 +20,8 @@
                     (read-string (System/getenv "MUNCHCAL_BCRYPT_WORK_FACTOR"))))
 
 (defn account-and-token-response [account token]
-  {:body {:account (dissoc account :password)
-          :token (dissoc token :account-id)}})
+  {:body {:account (dissoc account :password :created-date :modified-date)
+          :token (dissoc token :account-id :created-date :modified-date)}})
 
 ; ---------- handlers -----------
 ; todo - make this actually validate

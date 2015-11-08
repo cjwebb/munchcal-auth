@@ -14,7 +14,7 @@
                  [prismatic/schema "0.4.4"]
                  [metosin/schema-tools "0.5.2"]
                  [dire "0.5.3"]]
-  :plugins [[lein-ring "0.8.13"]
+  :plugins [[lein-ring "0.9.7"]
             [lein-dynamodb-local "0.2.6"]]
   :ring {:handler auth.handler/app
          :init auth.db/init!
